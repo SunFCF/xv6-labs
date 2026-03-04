@@ -16,7 +16,9 @@
 struct cmd {
   int type;
 };
-
+//这几个结构体是cmd的子类
+//cmd->type的值决定了cmd具体是哪种类型的命令
+//cmd->type的值由函数execcmd、redircmd、pipecmd、listcmd、backcmd在创建相应类型的命令时设置
 struct execcmd {
   int type;
   char *argv[MAXARGS];
@@ -96,7 +98,10 @@ runcmd(struct cmd *cmd)
     wait(0);
     runcmd(lcmd->right);
     break;
-
+  //创建两个子进程分别执行管道命令的左右两部分
+  //父进程等待两个子进程结束后再继续执行
+  //左边命令的将标准输出重定向到管道的写端，将输出的命令结果写入管道
+  //右边命令的将标准输入重定向到管道的读端，从管道读取数据进行处理
   case PIPE:
     pcmd = (struct pipecmd*)cmd;
     if(pipe(p) < 0)

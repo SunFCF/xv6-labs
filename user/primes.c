@@ -47,8 +47,7 @@ void primes(int pleft[2])
     }   
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     int input_pipe[2];
     pipe(input_pipe);// 创建一个管道，用于父进程向第一个子进程传递整数

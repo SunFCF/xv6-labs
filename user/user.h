@@ -23,6 +23,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int trace(int);     // 新添加的系统调用 trace() 的用户态函数声明
 
 // ulib.c
 int stat(const char*, struct stat*);

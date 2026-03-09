@@ -5,6 +5,12 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+/*
+  进程管理相关的代码，主要包括进程的创建、销毁、调度等功能。
+  其中，struct proc 结构体是 xv6 中表示一个进程的核心数据结构，包含了进程的各种状态信息和资源信息。
+  struct cpu 结构体表示一个 CPU 核心的信息，包括当前运行的进程等。
+  struct trapframe 结构体用于保存用户态程序在发生系统调用或中断时的寄存器状态，以便内核能够正确地返回用户态继续执行。
+*/
 
 struct cpu cpus[NCPU];
 
@@ -89,6 +95,7 @@ allocpid() {
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
 // If there are no free procs, or a memory allocation fails, return 0.
+// 这个是分配一个新的进程结构体，初始化它的状态，并返回这个进程结构体的指针。如果没有可用的进程结构体或者内存分配失败，则返回 0。
 static struct proc*
 allocproc(void)
 {
@@ -126,6 +133,7 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  p->mask_syscall_trace = 0; // 初始化系统调用跟踪掩码，默认不跟踪任何系统调用
 
   return p;
 }
@@ -255,6 +263,7 @@ growproc(int n)
 
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
+// 创建一个新的进程，复制父进程的内存和状态，并设置子进程的内核栈，使其能够像从 fork() 系统调用返回一样执行。
 int
 fork(void)
 {
@@ -296,6 +305,9 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&np->lock);
+
+  // 初始化子进程的系统调用跟踪掩码，继承父进程的设置
+  np->mask_syscall_trace = p->mask_syscall_trace;
 
   return pid;
 }

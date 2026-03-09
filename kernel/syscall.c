@@ -30,7 +30,8 @@ fetchstr(uint64 addr, char *buf, int max)
     return err;
   return strlen(buf);
 }
-
+// 这个函数用于从当前进程的用户地址空间中获取一个字符串，并将其复制到内核缓冲区 buf 中。
+// 它使用 copyinstr 函数来完成这个操作，并返回字符串的长度（不包括结尾的 null 字符）。如果发生错误，则返回 -1。
 static uint64
 argraw(int n)
 {
@@ -54,6 +55,8 @@ argraw(int n)
 }
 
 // Fetch the nth 32-bit system call argument.
+// 这个函数用于从当前进程的 trapframe 中获取第 n 个系统调用参数，并将其存储在 ip 指向的变量中。
+// 系统调用参数通常通过 a0-a5 寄存器传递，因此这个函数根据 n 的值返回对应寄存器中的值。
 int
 argint(int n, int *ip)
 {
@@ -104,6 +107,7 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
+extern uint64 sys_trace(void);     // 新添加的系统调用 trace() 的内核态函数声明
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -127,17 +131,47 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_trace]   sys_trace, // 将新添加的系统调用号和它的内核函数 sys_trace() 关联起来
 };
-
+//定义一个字符串数组 syscall_names，用于存储系统调用的名称，索引对应系统调用号，这样在打印系统调用跟踪信息时可以显示系统调用的名称而不是数字编号。
+const char *syscall_names[] = {
+[SYS_fork]    "fork",
+[SYS_exit]    "exit",
+[SYS_wait]    "wait",
+[SYS_pipe]    "pipe",
+[SYS_read]    "read",
+[SYS_kill]    "kill",
+[SYS_exec]    "exec",
+[SYS_fstat]   "fstat",
+[SYS_chdir]   "chdir",
+[SYS_dup]     "dup",
+[SYS_getpid]  "getpid",
+[SYS_sbrk]    "sbrk",
+[SYS_sleep]   "sleep",
+[SYS_uptime]  "uptime",
+[SYS_open]    "open",
+[SYS_write]   "write",
+[SYS_mknod]   "mknod",
+[SYS_unlink]  "unlink",
+[SYS_link]    "link",
+[SYS_mkdir]   "mkdir",
+[SYS_close]   "close",
+[SYS_trace]   "trace",
+};
+//处理系统调用的函数，根据系统调用号调用对应的内核函数来执行系统调用的具体操作。
 void
 syscall(void)
 {
   int num;
   struct proc *p = myproc();
-
-  num = p->trapframe->a7;
+  
+  num = p->trapframe->a7; // 从 a7 寄存器中获取系统调用号，a7 寄存器是 RISC-V 约定用来传递系统调用号的寄存器
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
-    p->trapframe->a0 = syscalls[num]();
+    p->trapframe->a0 = syscalls[num]();// 调用对应的系统调用处理函数，并将返回值存储在 a0 寄存器中，a0 寄存器是 RISC-V 约定用来传递系统调用返回值的寄存器
+    // 如果调用的是trace系统调用，打印系统调用跟踪信息
+    if(p->mask_syscall_trace & (1 << num)) { // 检查当前系统调用是否在跟踪掩码中，如果是，则打印跟踪信息
+      printf("%d: syscall %s -> %d\n", p->pid, syscall_names[num], p->trapframe->a0);
+    }
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);

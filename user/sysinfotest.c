@@ -3,7 +3,6 @@
 #include "kernel/sysinfo.h"
 #include "user/user.h"
 
-
 void
 sinfo(struct sysinfo *info) {
   if (sysinfo(info) < 0) {
@@ -37,7 +36,8 @@ countfree()
   sbrk(-((uint64)sbrk(0) - sz0));
   return n;
 }
-
+//这个函数调用 sysinfo() 的正确性，首先获取当前的空闲内存数量，然后通过 sbrk() 分配内存直到没有空闲内存为止
+//最后再次调用 sysinfo() 来验证空闲内存数量是否正确更新。最后通过 sbrk() 释放之前分配的内存，恢复到初始状态。
 void
 testmem() {
   struct sysinfo info;
@@ -74,7 +74,7 @@ testmem() {
     exit(1);
   }
 }
-
+//测试系统调用的函数
 void
 testcall() {
   struct sysinfo info;

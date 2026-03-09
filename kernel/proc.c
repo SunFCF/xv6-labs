@@ -705,3 +705,22 @@ procdump(void)
     printf("\n");
   }
 }
+
+// 获取进程数量的函数实现
+// 在 kernel/proc.c 中有一个结构体struct proc proc[NPROC]，它是一个进程表，包含了系统中所有的进程信息。
+// 每一个进程都有一个属性 state，表示进程的状态，所以可以遍历这个进程表，统计 state 不为 UNUSED 的进程数量，即为当前系统中的进程数量。
+
+void
+kama_procnum(uint64 *nproc) 
+{
+  *nproc = 0;
+  struct proc *p;
+  
+  for(p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    if(p->state != UNUSED){
+      (*nproc)++;
+    }
+    release(&p->lock);
+  }
+}

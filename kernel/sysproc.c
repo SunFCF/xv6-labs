@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 //这里是封装系统调用的内核函数实现，系统调用是用户程序与内核交互的接口
 //这些函数在 kernel/syscall.c 中被定义，并在 kernel/proc.c 中被调用。
 
@@ -108,5 +109,24 @@ sys_trace(void)
     return -1;
   struct proc *p = myproc();
   p->mask_syscall_trace = mask; // 设置当前进程的系统调用跟踪掩码，用户传入的 mask 参数指定了要跟踪的系统调用编号
+  return 0;
+}
+// sys_sysinfo() 函数的实现，获取系统信息(空闲内存数量和已创建进程数量)并返回给用户态
+// **注意要从内核空间拷贝数据到用户空间，因为 sysinfo 结构体是在用户空间定义的，内核需要将数据写入用户空间的地址**
+uint64
+sys_sysinfo(void)
+{
+  struct sysinfo info;
+  kama_freebytes(&info.freemem);	// 获取空闲内存
+  kama_procnum(&info.nproc);		// 获取进程数量
+
+  //获取用户虚拟地址
+  uint64 dstaddr;
+  argaddr(0, &dstaddr);
+
+  //从内核空间拷贝数据到用户空间
+  if (copyout(myproc()->pagetable, dstaddr, (char*)&info, sizeof info) < 0)
+      return -1;
+
   return 0;
 }

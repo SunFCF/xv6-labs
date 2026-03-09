@@ -21,3 +21,4 @@
 #define SYS_mkdir  20
 #define SYS_close  21
 #define SYS_trace  22 // 这个是新添加的系统调用编号，trace() 系统调用的编号为 22
+#define SYS_sysinfo 23 // 这个是新添加的系统调用编号，sysinfo() 系统调用的编号为 23

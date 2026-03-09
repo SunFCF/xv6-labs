@@ -38,3 +38,4 @@ entry("sbrk");
 entry("sleep");
 entry("uptime");
 entry("trace");     # 新添加的系统调用 trace() 的用户态跳板函数
+entry("sysinfo");   # 获取系统信息的系统调用用户态跳板函数

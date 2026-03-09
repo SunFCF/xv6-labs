@@ -108,6 +108,7 @@ extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_trace(void);     // 新添加的系统调用 trace() 的内核态函数声明
+extern uint64 sys_sysinfo(void);   // 获取系统信息的系统调用内核态函数声明
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -132,6 +133,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_trace]   sys_trace, // 将新添加的系统调用号和它的内核函数 sys_trace() 关联起来
+[SYS_sysinfo] sys_sysinfo, // 将新添加的系统调用号和它的内核函数 sys_sysinfo() 关联起来
 };
 //定义一个字符串数组 syscall_names，用于存储系统调用的名称，索引对应系统调用号，这样在打印系统调用跟踪信息时可以显示系统调用的名称而不是数字编号。
 const char *syscall_names[] = {
@@ -157,6 +159,7 @@ const char *syscall_names[] = {
 [SYS_mkdir]   "mkdir",
 [SYS_close]   "close",
 [SYS_trace]   "trace",
+[SYS_sysinfo] "sysinfo",
 };
 //处理系统调用的函数，根据系统调用号调用对应的内核函数来执行系统调用的具体操作。
 void

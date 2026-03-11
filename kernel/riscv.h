@@ -351,4 +351,5 @@ sfence_vma()
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
 
 typedef uint64 pte_t;
-typedef uint64 *pagetable_t; // 512 PTEs
+typedef uint64 *pagetable_t; // 512 PTEs 这个类型定义了页表项和页表的类型，pte_t 是一个 64 位的整数，表示一个页表项，
+                             // 而 pagetable_t 是一个指向页表的指针，页表包含 512 个页表项。

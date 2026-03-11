@@ -6,7 +6,10 @@
 #include "proc.h"
 #include "defs.h"
 #include "elf.h"
-
+// exec实现创建一个新的用户进程（创建新进程），加载指定路径的可执行文件，并将其作为当前进程的映像。
+// 它首先打开指定路径的文件，并检查 ELF 头以验证文件格式。然后，它创建一个新的页表，并将程序的各个段加载到内存中。
+// 接下来，它为用户栈分配两页内存，并将命令行参数复制到用户栈上。最后，它更新当前进程的页表、大小、程序计数器和栈指针，以便新程序可以正确运行。
+// 如果在任何步骤中发生错误，exec 会清理资源并返回 -1。
 static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uint sz);
 
 int
@@ -23,7 +26,7 @@ exec(char *path, char **argv)
 
   begin_op();
 
-  if((ip = namei(path)) == 0){
+  if((ip = namei(path)) == 0){ //打开文件，如果失败，调用 end_op 结束操作，并返回 -1。
     end_op();
     return -1;
   }
@@ -35,7 +38,7 @@ exec(char *path, char **argv)
   if(elf.magic != ELF_MAGIC)
     goto bad;
 
-  if((pagetable = proc_pagetable(p)) == 0)
+  if((pagetable = proc_pagetable(p)) == 0)//分配一个新的页表，如果失败，调用 end_op 结束操作，并返回 -1。
     goto bad;
 
   // Load program into memory.
@@ -49,13 +52,13 @@ exec(char *path, char **argv)
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
     uint64 sz1;
-    if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0)
+    if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0) // 为程序的段分配内存，如果失败，调用 uvmdealloc 释放之前分配的内存，并调用 end_op 结束操作，然后返回 -1。
       goto bad;
     sz = sz1;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
-    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
-      goto bad;
+    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0) // 调用 loadseg 函数加载程序段到内存中，如果失败，调用 uvmdealloc 释放之前分配的内存，并调用 end_op 结束操作，然后返回 -1。
+      goto bad;                                                 // lodseg会调用walkaddr找到分配的物理内存地址，然后调用readi将文件内容读入内存。
   }
   iunlockput(ip);
   end_op();

@@ -465,3 +465,39 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+// 这两个函数是用来打印页表的内容的，vmprint 函数是入口函数，调用 pgtblprint 函数来递归打印页表的内容。
+// 会将当前进程使用的全部页表项打印出来
+int
+pgtblprint(pagetable_t pagetable, int level)
+{
+  for (int i = 0; i < 512; i++)
+  {
+    pte_t pte = pagetable[i];
+    
+    if (pte & PTE_V) // 如果页表项有效，打印
+    {
+      printf("..");
+      for (int j = 0; j < level; j++)
+      {
+        printf(" ..");
+      }
+
+      printf("%d: pte %p pa %p\n", i, pte, PTE2PA(pte));
+
+      if ((pte & (PTE_R | PTE_W | PTE_X)) == 0) // 如果页表项不是叶子节点，继续递归打印下一层级的页表内容
+      {
+        uint64 child = PTE2PA(pte);// 获取子页表的物理地址，才能访问到子页表的内容
+        pgtblprint((pagetable_t)child, level + 1);  // 递归调用 pgtblprint 函数，传入子页表的地址和当前级别加 1，以便正确缩进打印输出。
+      }
+    }
+  
+  }
+  return 0;
+}
+
+int
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  return pgtblprint(pagetable, 0); //调用 pgtblprint 函数来递归打印页表的内容，初始级别为 0。
+}

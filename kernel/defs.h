@@ -178,6 +178,7 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+int             vmprint(pagetable_t); //声明了一个函数 vmprint，用于打印页表的内容，参数是一个页表指针 pagetable_t 类型。这个函数在调试时非常有用，可以帮助开发者查看当前页表的结构和映射关系。
 
 // plic.c
 void            plicinit(void);

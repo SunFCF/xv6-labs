@@ -10,6 +10,7 @@
 // 它首先打开指定路径的文件，并检查 ELF 头以验证文件格式。然后，它创建一个新的页表，并将程序的各个段加载到内存中。
 // 接下来，它为用户栈分配两页内存，并将命令行参数复制到用户栈上。最后，它更新当前进程的页表、大小、程序计数器和栈指针，以便新程序可以正确运行。
 // 如果在任何步骤中发生错误，exec 会清理资源并返回 -1。
+// argc参数是命令行参数的数量，argv是一个指向字符串数组的指针，每个字符串都是一个命令行参数。exec 将这些参数复制到用户栈上，并将它们的地址传递给新程序的 main 函数。
 static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uint sz);
 
 int
@@ -119,8 +120,11 @@ exec(char *path, char **argv)
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
-  return argc; // this ends up in a0, the first argument to main(argc, argv)
+  if (p->pid == 1) vmprint(p->pagetable); //打印页表，pid为1的进程是init进程，系统启动后第一个运行的用户进程。
 
+  return argc; // this ends up in a0, the first argument to main(argc, argv)
+               // exec调用要改变a0的值，a1的值，epc的值，pagetable的值，sz的值。a0是main函数的第一个参数argc，a1是main函数的第二个参数argv，epc是程序入口地址，pagetable是新的页表，sz是新的内存大小。  
+               // 这样user程序在执行时就会从新的入口地址开始执行，并且可以通过a0和a1访问命令行参数，同时使用新的页表和内存空间。
  bad:
   if(pagetable)
     proc_freepagetable(pagetable, sz);

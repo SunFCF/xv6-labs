@@ -55,6 +55,8 @@ exec(char *path, char **argv)
     uint64 sz1;
     if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0) // 为程序的段分配内存，如果失败，调用 uvmdealloc 释放之前分配的内存，并调用 end_op 结束操作，然后返回 -1。
       goto bad;
+    if (sz1 >= PLIC) // 如果分配的内存超过了 PLIC 的地址，调用 uvmdealloc 释放之前分配的内存，并调用 end_op 结束操作，然后返回 -1。
+      goto bad;
     sz = sz1;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
@@ -111,6 +113,9 @@ exec(char *path, char **argv)
     if(*s == '/')
       last = s+1;
   safestrcpy(p->name, last, sizeof(p->name));
+  // 清除内核页表中对程序内存的旧映射，然后重新建立映射。
+  uvmunmap(p->kernelpgtbl, 0, PGROUNDUP(oldsz)/PGSIZE, 0);
+  kvmcopymappings(pagetable, p->kernelpgtbl, 0, sz);
     
   // Commit to the user image.
   oldpagetable = p->pagetable;

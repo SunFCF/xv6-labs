@@ -561,7 +561,9 @@ kvmcopymappings(pagetable_t src, pagetable_t dst, uint64 start, uint64 sz)
   uint64 pa, i;
   uint flags;
 
-  // PGROUNDUP: 将地址向上取整到页边界，防止重新映射已经映射的页，特别是在执行growproc操作时
+  // 取整到页面边界，遍历 src 页表中从 start 开始的 sz 大小范围内的页表项，将它们的映射关系复制到 dst 页表中。
+  // 对于每个页表项，首先检查它是否存在且有效，如果无效则调用 panic 函数终止程序。然后获取该页表项对应的物理地址和权限标志，并将其映射到 dst 页表中。
+  // 如果在映射过程中发生错误，则调用 uvmunmap 函数将已经映射的部分撤销，并返回 -1。
   for(i = PGROUNDUP(start); i < start + sz; i += PGSIZE){
     if((pte = walk(src, i, 0)) == 0)
       panic("kvmcopymappings: pte should exist");
@@ -573,8 +575,9 @@ kvmcopymappings(pagetable_t src, pagetable_t dst, uint64 start, uint64 sz)
     flags = PTE_FLAGS(*pte) & ~PTE_U;
     if(mappages(dst, i, PGSIZE, pa, flags) != 0){
       goto err;
-    }  
+    }
   }
+
   return 0;
 
  err:

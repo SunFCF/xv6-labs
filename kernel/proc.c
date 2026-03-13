@@ -165,7 +165,7 @@ freeproc(struct proc *p)
   // 这会导致内核运行所需要的关键物理页被释放，从而导致内核崩溃。
   // 这里使用 kfree(p->kernelpgtbl) 也是不足够的，因为这只释放了**一级页表本身**，而不释放二级以及三级页表所占用的空间。
   kvm_free_kernelpgtbl(p->kernelpgtbl);
-
+  p->kernelpgtbl = 0;
   p->state = UNUSED;
 }
 
@@ -237,13 +237,12 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
+  // 设置内核页表中对用户内存的映射
+  kvmcopymappings(p->pagetable, p->kernelpgtbl, 0, p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
-
-  // 设置内核页表中对用户内存的映射
-  kvmcopymappings(p->pagetable, p->kernelpgtbl, 0, p->sz);
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -265,16 +264,19 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+    uint64 newsz;
+    if((newsz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
-    // 如果用户内存的增长导致了内核页表中对用户内存的映射发生了变化，那么也需要同步更新内核页表中的映射。
-    if(kvmcopymappings(p->pagetable, p->kernelpgtbl, 0, sz) < 0) {
+    // 内核页表中的映射同步扩大
+    if(kvmcopymappings(p->pagetable, p->kernelpgtbl, sz, n) != 0) {
+      uvmdealloc(p->pagetable, newsz, sz);
       return -1;
     }
+    sz = newsz;
   } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
-    // 如果用户内存的减少导致了内核页表中对用户内存的映射发生了变化，那么也需要同步更新内核页表中的映射。
+    uvmdealloc(p->pagetable, sz, sz + n);
+    // 内核页表中的映射同步缩小
     sz = kvmdealloc(p->kernelpgtbl, sz, sz + n);
   }
   p->sz = sz;

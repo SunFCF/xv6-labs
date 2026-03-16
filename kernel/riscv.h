@@ -318,7 +318,17 @@ sfence_vma()
   // the zero, zero means flush all TLB entries.
   asm volatile("sfence.vma zero, zero");
 }
-
+// 获取当前栈帧的fp指针  个函数的栈都是由栈帧（Stack Frame）构成的，每次函数调用都会创建一个栈帧
+// fp 指向当前栈帧的开始地址，sp 指向当前栈帧的结束地址
+// 栈帧中从高到低第一个 8 字节 fp-8 是 return address，也就是当前调用层应该返回到的地址
+// 栈帧中从高到低第二个 8 字节 fp-16 是 previous address，指向上一层栈帧的 fp 开始地址。
+static inline uint64
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x));
+  return x;  
+}
 
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page

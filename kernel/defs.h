@@ -80,6 +80,7 @@ int             pipewrite(struct pipe*, uint64, int);
 void            printf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
+void            backtrace(void);    //打印函数调用过程;从当前位置开始，向上遍历函数调用链，打印每个栈帧的返回地址
 
 // proc.c
 int             cpuid(void);

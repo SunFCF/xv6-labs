@@ -26,9 +26,9 @@ main(int argc, char *argv[])
   test2();
   exit(0);
 }
-
+// 全局变量，用于记录定时器中断处理函数 periodic 被调用的次数
 volatile static int count;
-
+// 测试定时器中断是否能够正常触发，并且在处理函数 periodic 中调用 sigreturn 能否正确返回到被中断的程序继续执行
 void
 periodic()
 {
@@ -39,6 +39,11 @@ periodic()
 
 // tests whether the kernel calls
 // the alarm handler even a single time.
+// 这个测试程序的目的是验证内核是否能够正确触发时钟中断并调用用户程序注册的时钟处理函数 periodic。
+// 1. 首先在 test0 中调用 sigalarm 注册一个时钟处理函数 periodic，并设置时钟周期为 2 ticks
+// 2. 然后进入一个循环，等待 periodic 被调用，或者循环执行一定次数后退出
+// 3. 在 periodic 中，每次被调用时会将全局变量 count 加 1，并打印 "alarm!"，然后调用 sigreturn 返回到被中断的程序继续执行
+// 4. 如果在 test0 的循环中发现 count 大于 0，说明 periodic 已经被调用过一次，测试通过；如果循环结束后 count 仍然为 0，说明 periodic 从未被调用过，测试失败
 void
 test0()
 {
@@ -75,6 +80,12 @@ void __attribute__ ((noinline)) foo(int i, int *j) {
 // occurred, with all registers holding the same values they
 // held when the interrupt occurred.
 //
+// 这个测试程序的目的是验证内核是否能够正确触发时钟中断并调用用户程序注册的时钟处理函数 periodic，并且在 periodic 中调用 sigreturn 能否正确返回到被中断的程序继续执行
+// 1. 首先在 test1 中调用 sigalarm 注册一个时钟处理函数 periodic，并设置时钟周期为 2 ticks
+// 2. 然后进入一个循环，执行一个耗时的计算任务，并在每次调用 foo 时将一个计数器 j 加 1
+// 3. 在 periodic 中，每次被调用时会将全局变量 count 加 1，并打印 "alarm!"，然后调用 sigreturn 返回到被中断的程序继续执行
+// 4. 如果在 test1 的循环中发现 count 大于等于 10，说明 periodic 已经被调用过至少 10 次，测试通过；如果循环结束后 count 小于 10，说明 periodic 被调用的次数不足，测试失败
+// 5. 另外，如果循环结束后 j 的值不等于 i 的值，说明 periodic 中调用 sigreturn 后没有正确返回到被中断的程序继续执行，导致 foo 没有被正确调用，测试失败
 void
 test1()
 {
@@ -108,6 +119,11 @@ test1()
 
 //
 // tests that kernel does not allow reentrant alarm calls.
+// 这个测试程序的目的是验证内核在处理时钟中断时能够正确防止闹钟处理函数被重入调用
+// 1. 首先在 test2 中调用 sigalarm 注册一个时钟处理函数 slow_handler，并设置时钟周期为 2 ticks
+// 2. 然后进入一个循环，执行一个耗时的计算任务，并在每次调用 slow_handler 时将一个计数器 count 加 1
+// 3. 在 slow_handler 中，每次被调用时会将全局变量 count 加 1，并打印 "alarm!"，然后执行一个耗时的循环来模拟处理过程，
+// 最后调用 sigalarm(0, 0) 禁止再次触发时钟事件，并调用 sigreturn 返回到被中断的程序继续执行 
 void
 test2()
 {

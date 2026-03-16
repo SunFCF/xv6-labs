@@ -23,6 +23,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int sigalarm(int ticks, void (*handler)());     // ticks 是时钟中断的周期，handler 是时钟中断处理函数的地址(当计数器达到 ticks 时，内核会调用 handler 函数）
+int sigreturn(void);                            // 让内核知道用户程序已经完成了时钟中断处理函数的执行，可以继续被正常调度
 
 // ulib.c
 int stat(const char*, struct stat*);

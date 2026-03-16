@@ -96,4 +96,24 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+} 
+// 设置闹钟，以及时钟中断处理函数的地址
+uint64
+sys_sigalarm(void)
+{
+  int n;
+  uint64 fn;
+  if(argint(0, &n) < 0) // 获取寄存器 a0 中的参数 n 的值，如果获取失败则返回 -1
+    return -1;
+  if(argaddr(1, &fn) < 0)// 获取寄存器 a1 中的参数 fn 的值，如果获取失败则返回 -1
+    return -1;
+  
+  return sigalarm(n, (void(*)())(fn));
+}
+
+// 让内核知道用户程序已经完成了时钟中断处理函数的执行，可以继续被正常调度
+uint64
+sys_sigreturn(void)
+{
+	return sigreturn();
 }

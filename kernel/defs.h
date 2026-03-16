@@ -146,6 +146,8 @@ void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
 void            usertrapret(void);
+int             sigalarm(int ticks, void(*handler)()); // 实现定时器功能的系统调用，ticks 是时钟中断的周期，handler 是时钟中断处理函数的地址(当计数器达到 ticks 时，内核会调用 handler 函数）
+int             sigreturn(void);                       // 让内核知道用户程序已经完成了时钟中断处理函数的执行，可以继续被正常调度
 
 // uart.c
 void            uartinit(void);

@@ -134,6 +134,9 @@ printfinit(void)
 }
 
 // 打印函数调用过程;从当前位置开始，向上遍历函数调用链，打印每个栈帧的返回地址
+// fp 指向当前栈帧的开始地址，sp 指向当前栈帧的结束地址
+// 栈帧中从高到低第一个 8 字节 fp-8 是 return address，也就是当前调用层应该返回到的地址
+// 栈帧中从高到低第二个 8 字节 fp-16 是 previous address，指向上一层栈帧的 fp 开始地址。
 void 
 backtrace() {
   uint64 fp = r_fp();

@@ -32,7 +32,13 @@ trapinithart(void)
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
-//
+// 这个函数是用户态发生中断、异常或系统调用时进入内核的入口，确定了进入内核后由哪个函数来处理这些事件
+// 1. 首先检查是否是从用户模式进入内核，如果不是则 panic，因为 usertrap 只能由用户模式触发
+// 2. 将 stvec 寄存器设置为 kernelvec 的地址，这样后续的中断和异常都会跳转到 kernelvec 进行处理
+// 3. 保存用户程序的 pc 到 trapframe 中，以便后续处理完成后能够正确返回用户程序
+// 4. 根据 scause 寄存器的值判断是系统调用还是其他设备中断，分别进行处理
+// 5. 如果进程被标记为 killed，则调用 exit 退出进程
+// 6. 如果是时钟中断，则调用 yield 让出 CPU，进行调度
 void
 usertrap(void)
 {
@@ -76,9 +82,23 @@ usertrap(void)
   if(p->killed)
     exit(-1);
 
-  // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+  // 定时器中断发生时，处理逻辑
+  if(which_dev == 2) 
+  {
+    if(p->alarm_interval != 0) { // 如果设定了时钟事件
+      if(--p->alarm_ticks <= 0) { // 时钟倒计时 -1 tick，如果已经到达或超过设定的 tick 数
+        if(!p->alarm_goingoff) { // 确保没有时钟正在运行
+          p->alarm_ticks = p->alarm_interval;
+          // 备份当前的 trapframe 到 alarm_trapframe 中，以便时钟处理函数执行完成后能够恢复到正确的状态继续执行原程序
+          *p->alarm_trapframe = *p->trapframe; // 
+          p->trapframe->epc = (uint64)p->alarm_handler; // 跳转到用户程序中注册的时钟处理函数处执行
+          p->alarm_goingoff = 1;  // 避免在时钟处理函数执行过程中再次触发时钟中断导致 alarm_trapframe 被覆盖
+        }
+        // 如果一个时钟到期的时候已经有一个时钟处理函数正在运行，则会推迟到原处理函数运行完成后的下一个 tick 才触发这次时钟
+      }
+    }
+    yield(); 
+  }
 
   usertrapret();
 }
@@ -218,3 +238,23 @@ devintr()
   }
 }
 
+// 设置进程中时钟的相关属性
+int 
+sigalarm(int ticks, void(*handler)()) 
+{
+  // 设置 myproc 中的相关属性
+  struct proc *p = myproc();
+  p->alarm_interval = ticks;
+  p->alarm_handler = handler;
+  p->alarm_ticks = ticks;
+  return 0;
+}
+
+// 将进程恢复到alarm中断前的状态
+int sigreturn() {
+  // 将 trapframe 恢复到时钟中断之前的状态，恢复原本正在执行的程序流
+  struct proc *p = myproc();
+  *p->trapframe = *p->alarm_trapframe;
+  p->alarm_goingoff = 0;
+  return 0;
+}

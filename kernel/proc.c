@@ -162,6 +162,10 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   // 释放时钟相关字段
+  if(p->alarm_trapframe)
+    kfree((void*)p->alarm_trapframe);
+  p->alarm_trapframe = 0;
+   
   p->alarm_interval = 0;
   p->alarm_handler = 0;
   p->alarm_ticks = 0;

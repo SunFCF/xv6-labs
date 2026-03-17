@@ -171,6 +171,8 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+void            uvmlazytouch(uint64 va);  // 发生缺页时分配内存
+int             uvmshouldtouch(uint64 va);// 判断是否是一个合法的用户地址，应该分配地址
 
 // plic.c
 void            plicinit(void);

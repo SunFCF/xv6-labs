@@ -67,10 +67,15 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
+  } else { // 缺页故障，sscaue寄存器会保存错误原因;13为load，15为store，12为指令引起的 
+    uint64 va = r_stval(); //stval寄存器会保存发生异常的地址
+    if ((r_scause() == 13 || r_scause() == 15) && uvmshouldtouch(va)) { // 只有store引起的缺页才进行处理
+      uvmlazytouch(va);
+    } else { // 其他异常抛出，打印错误信息并杀死进程
+      printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    }
   }
 
   if(p->killed)

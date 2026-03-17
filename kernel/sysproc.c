@@ -44,11 +44,16 @@ sys_sbrk(void)
   int addr;
   int n;
 
+  struct proc *p = myproc();
   if(argint(0, &n) < 0)
     return -1;
-  addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
+  addr = myproc()->sz;     
+  //if(growproc(n) < 0)   不再立刻分配内存，而是等到访问时才分配
+  //  return -1;
+  if (n < 0){
+    uvmdealloc(p->pagetable, p->sz, p->sz + n);     // 如果是释放内存，直接调用 uvmdealloc 进行释放
+  } 
+  p->sz += n; // 更新进程的内存大小
   return addr;
 }
 

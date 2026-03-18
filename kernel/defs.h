@@ -63,6 +63,8 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+void*           kcopy_n_deref(void *pa); //  将物理页的一个引用实复制到一个新物理页上，并将原来页的引用次数减1
+void            krefpage(void *pa); // 增加一个页的引用次数
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -171,6 +173,8 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+int             uvmcheckcowpage(uint64 va); // 检查一个地址指向的页是否是懒复制页
+int             uvmcowcopy(uint64 va); // 为懒复制页分配新的物理页
 
 // plic.c
 void            plicinit(void);

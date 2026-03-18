@@ -67,6 +67,11 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if ((r_scause() == 13 || r_scause() == 15) && uvmcheckcowpage(r_stval())) {// 触发Page Fault，并且访问的是一个懒复制页
+    // 为r_stval()对应的虚拟地址分配一个新的物理页
+    if(uvmcowcopy(r_stval()) == -1){ // 如果内存不足，则杀死进程
+      p->killed = 1;
+    }    
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

@@ -16,6 +16,7 @@ struct entry {
 struct entry *table[NBUCKET];
 int keys[NKEYS];
 int nthread = 1;
+pthread_mutex_t locks[NBUCKET]; // 每个桶一个锁，保护对桶的访问
 
 double
 now()
@@ -40,6 +41,7 @@ void put(int key, int value)
 {
   int i = key % NBUCKET;
 
+  pthread_mutex_lock(&locks[i]); // 加锁，保护对桶的访问
   // is the key already present?
   struct entry *e = 0;
   for (e = table[i]; e != 0; e = e->next) {
@@ -53,19 +55,21 @@ void put(int key, int value)
     // the new is new.
     insert(key, value, &table[i], table[i]);
   }
+  pthread_mutex_unlock(&locks[i]); // 解锁
 }
-
+// 加入互斥锁，但要降低锁的粒度，不能锁住整个函数，不然实际上就变成了单线程了，失去了多线程的意义。
+// 只锁住访问bucket的部分，这样不同线程访问bucket不同时就不会互相干扰了。从整个哈希表一个锁降低到每个 bucket 一个锁。
 static struct entry*
 get(int key)
 {
   int i = key % NBUCKET;
 
-
+  pthread_mutex_lock(&locks[i]); // 加锁，保护对桶的访问
   struct entry *e = 0;
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key) break;
   }
-
+  pthread_mutex_unlock(&locks[i]); // 解锁
   return e;
 }
 
@@ -95,13 +99,22 @@ get_thread(void *xa)
   printf("%d: %d keys missing\n", n, missing);
   return NULL;
 }
-
+// 当多个线程同时访问同一个桶时，可能会发生数据竞争，导致put和get操作的结果不确定。
+// 例如：当两个线程同时向同一个桶中插入数据时，线程一在插入数据时，线程二也在插入数据，这时可能会发生以下情况：
+// 1. 线程一先插入数据，线程二后插入数据，这时线程二插入的数据会覆盖线程一插入的数据，导致线程一插入的数据丢失。
+// 2. 线程二先插入数据，线程一后插入数据，这时线程一插入的数据会覆盖线程二插入的数据，导致线程二插入的数据丢失。
+// 3. 线程一和线程二同时插入数据，这时可能会发生数据竞争，导致插入的数据不确定，可能会出现数据丢失或者数据重复的情况。
+// 同样的情况也可能发生在get操作中，当多个线程同时访问同一个桶时，可能会发生数据竞争，导致get操作的结果不确定，可能会出现数据丢失或者数据重复的情况。
+// 解决这个问题的方法是使用锁来保护对桶的访问，确保同一时间只有一个线程可以访问同一个桶，从而避免数据竞争的发生。
 int
 main(int argc, char *argv[])
 {
   pthread_t *tha;
   void *value;
   double t1, t0;
+  for (int i = 0; i < NBUCKET; i++) {
+    pthread_mutex_init(&locks[i], NULL);
+  }
 
   if (argc < 2) {
     fprintf(stderr, "Usage: %s nthreads\n", argv[0]);

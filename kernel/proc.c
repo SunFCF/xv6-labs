@@ -337,7 +337,7 @@ exit(int status)
   if(p == initproc)
     panic("init exiting");
 
-  // Close all open files.
+  // Close all open files.  关闭所有打开的文件
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){
       struct file *f = p->ofile[fd];
@@ -345,7 +345,7 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  // 释放当前工作目录
   begin_op();
   iput(p->cwd);
   end_op();
@@ -356,6 +356,8 @@ exit(int status)
   // acquired any other proc lock. so wake up init whether that's
   // necessary or not. init may miss this wakeup, but that seems
   // harmless.
+  // 唤醒init进程，init进程会调用wait()来回收子进程的资源，如果这是一个孤儿进程
+  // 那么它的父进程已经退出了，init进程会成为它的新父进程，负责回收它的资源
   acquire(&initproc->lock);
   wakeup1(initproc);
   release(&initproc->lock);
@@ -366,20 +368,22 @@ exit(int status)
   // exiting parent, but the result will be a harmless spurious wakeup
   // to a dead or wrong process; proc structs are never re-allocated
   // as anything else.
+  // 获取当前进程的父进程指针，p->parent可能被并发修改所以要获取父进程的锁，确保父进程不会在我们获取父进程指针后被修改为其他进程，导致我们唤醒了错误的父进程
   acquire(&p->lock);
   struct proc *original_parent = p->parent;
   release(&p->lock);
   
   // we need the parent's lock in order to wake it up from wait().
   // the parent-then-child rule says we have to lock it first.
+  // 先获取父进程的锁，避免在获取子进程的锁时发生死锁，因为父进程可能正在等待子进程退出，而子进程正在等待父进程的锁
   acquire(&original_parent->lock);
 
   acquire(&p->lock);
 
-  // Give any children to init.
+  // Give any children to init. 将自己的子进程重新分配给init进程，避免出现孤儿进程
   reparent(p);
 
-  // Parent might be sleeping in wait().
+  // Parent might be sleeping in wait(). 唤醒父进程收尸
   wakeup1(original_parent);
 
   p->xstate = status;
@@ -426,7 +430,7 @@ wait(uint64 addr)
             release(&p->lock);
             return -1;
           }
-          freeproc(np);
+          freeproc(np);  // 释放子进程的资源，并将其状态置为UNUSED
           release(&np->lock);
           release(&p->lock);
           return pid;
@@ -514,8 +518,8 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
-  mycpu()->intena = intena;
+  swtch(&p->context, &mycpu()->context);  // scherduler调度后是返回到这里
+  mycpu()->intena = intena;  // 保存和恢复中断使能状态
 }
 
 // Give up the CPU for one scheduling round.
@@ -526,7 +530,7 @@ yield(void)
   acquire(&p->lock);
   p->state = RUNNABLE;
   sched();
-  release(&p->lock);
+  release(&p->lock);  // 这里放掉在scherduler拿到的锁，sched返回到这里时
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -551,7 +555,9 @@ forkret(void)
 }
 
 // Atomically release lock and sleep on chan.
-// Reacquires lock when awakened.
+// Reacquires lock when awakened.、
+// 将当前进程放入睡眠状态，并且放在chan上等待被唤醒，chan只是一个标识符，可以是任意，标记等待的事件
+// 例如：等待某个文件被写入，等待某个时钟中断等
 void
 sleep(void *chan, struct spinlock *lk)
 {
@@ -563,8 +569,8 @@ sleep(void *chan, struct spinlock *lk)
   // guaranteed that we won't miss any wakeup
   // (wakeup locks p->lock),
   // so it's okay to release lk.
-  if(lk != &p->lock){  //DOC: sleeplock0
-    acquire(&p->lock);  //DOC: sleeplock1
+  if(lk != &p->lock){  //DOC: sleeplock0  lk是是调用者持有的外部资源锁
+    acquire(&p->lock);  //DOC: sleeplock1 p->lock是进程的锁
     release(lk);
   }
 
@@ -586,6 +592,7 @@ sleep(void *chan, struct spinlock *lk)
 
 // Wake up all processes sleeping on chan.
 // Must be called without any p->lock.
+// 唤醒在chan上睡眠的所有进程
 void
 wakeup(void *chan)
 {

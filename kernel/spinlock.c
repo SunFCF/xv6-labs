@@ -85,7 +85,8 @@ acquire(struct spinlock *lk)
   // past this point, to ensure that the critical section's memory
   // references happen strictly after the lock is acquired.
   // On RISC-V, this emits a fence instruction.
-  __sync_synchronize();
+  __sync_synchronize(); // 内存屏障：这条指令的作用是确保在获取锁之后，所有对共享资源的访问都不会被编译器或处理器重新排序到获取锁之前。
+                        // 这对于保证多线程环境下的正确性非常重要，因为它确保了在进入临界区之前，锁已经被成功获取，并且所有对共享资源的访问都是安全的。
 
   // Record info about lock acquisition for holding() and debugging.
   lk->cpu = mycpu();
@@ -134,27 +135,29 @@ holding(struct spinlock *lk)
 // it takes two pop_off()s to undo two push_off()s.  Also, if interrupts
 // are initially off, then push_off, pop_off leaves them off.
 
+// 嵌套深度计数器，确保嵌套调用的正确性;统计调用了几次锁，在到pop_off时只有当嵌套深度为0(所有锁都释放了)且之前是开中断的情况下才开中断
+// 嵌套：进程a拿锁a，调用b拿锁b，b调用c拿锁c，就是三层嵌套，必须是最后一层调用pop_off时才开中断
 void
 push_off(void)
 {
-  int old = intr_get();
+  int old = intr_get(); // 记录之前的中断状态
 
   intr_off();
-  if(mycpu()->noff == 0)
+  if(mycpu()->noff == 0)  // 只有在最外层调用时才保存之前的中断状态
     mycpu()->intena = old;
-  mycpu()->noff += 1;
+  mycpu()->noff += 1;  // 嵌套深度加一
 }
 
 void
 pop_off(void)
 {
   struct cpu *c = mycpu();
-  if(intr_get())
+  if(intr_get()) // 确保在pop_off时中断是关闭的，否则可能会导致死锁
     panic("pop_off - interruptible");
-  if(c->noff < 1)
+  if(c->noff < 1)// 确保pop_off的调用次数不超过push_off的调用次数，否则可能会导致中断状态错误
     panic("pop_off");
   c->noff -= 1;
-  if(c->noff == 0 && c->intena)
+  if(c->noff == 0 && c->intena)// 只有当所有嵌套调用都结束时才恢复之前的中断状态
     intr_on();
 }
 

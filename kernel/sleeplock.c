@@ -36,7 +36,7 @@ releasesleep(struct sleeplock *lk)
   acquire(&lk->lk);
   lk->locked = 0;
   lk->pid = 0;
-  wakeup(lk);
+  wakeup(lk); // 唤醒所有在这个睡眠锁上睡觉的进程
   release(&lk->lk);
 }
 

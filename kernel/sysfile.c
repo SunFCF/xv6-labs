@@ -237,7 +237,7 @@ bad:
   end_op();
   return -1;
 }
-
+// 只在文件不存在时创建新 inode，文件已存在时直接返回已有 inode
 static struct inode*
 create(char *path, short type, short major, short minor)
 {
@@ -248,7 +248,7 @@ create(char *path, short type, short major, short minor)
     return 0;
 
   ilock(dp);
-
+  // 查找目录中是否已经存在同名文件，如果存在且类型不匹配，则返回0；如果存在且类型匹配，则直接返回该inode。
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
@@ -257,7 +257,7 @@ create(char *path, short type, short major, short minor)
     iunlockput(ip);
     return 0;
   }
-
+  // 文件不存在，创建新文件，分配新的inode，并设置类型、设备号等信息。
   if((ip = ialloc(dp->dev, type)) == 0)
     panic("create: ialloc");
 
@@ -297,19 +297,44 @@ sys_open(void)
 
   begin_op();
 
-  if(omode & O_CREATE){
+  if(omode & O_CREATE){ // 如果打开模式包含O_CREATE标志，表示需要创建新文件。调用create函数尝试创建文件，如果文件已存在且类型不匹配则返回错误。
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
       end_op();
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
-      end_op();
-      return -1;
+    int symlink_depth = 0;
+    while (1)
+    {
+      if((ip = namei(path)) == 0) { // 解析路径查找文件对应的inode，如果找不到则返回错误。
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+      
+      if(ip->type == T_SYMLINK && (omode & O_NOFOLLOW) == 0) { // 如果找到的inode是一个符号链接，并且打开模式没有设置O_NOFOLLOW标志，则需要继续解析符号链接的目标路径。
+        if ( ++symlink_depth > 10) // 为了防止符号链接循环，设置一个最大解析深度，如果超过这个深度则返回错误。
+        { 
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+
+        if(readi(ip, 0, (uint64)path, 0, MAXPATH) < 0) // 从符号链接的内容中读取目标路径。
+        {
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        iunlockput(ip); // 解析完符号链接后，释放当前inode，继续下一轮循环解析目标路径。
+      }
+      else {
+        break; // 如果不是符号链接，或者打开模式设置了O_NOFOLLOW标志，则停止解析，继续后续的打开操作。
+      }   
     }
-    ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
+
+    if(ip->type == T_DIR && (omode & O_WRONLY)){ // 如果打开的文件是一个目录，并且打开模式设置了O_WRONLY标志，表示不允许以只写方式打开目录，返回错误。
       iunlockput(ip);
       end_op();
       return -1;
@@ -483,4 +508,34 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+// 添加一个新的系统调用sys_symlink，用于创建符号链接。
+// 它接受两个路径参数：target和linkpath，分别表示符号链接的目标路径和符号链接本身的路径。
+uint64
+sys_symlink(void)
+{
+  struct inode* ip;
+  char target[MAXPATH], path[MAXPATH];
+
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0) // 从用户空间获取参数
+    return -1;
+  
+  begin_op(); // 开始文件系统操作，确保操作的原子性
+
+  ip = create(path, T_SYMLINK, 0, 0); // 创建一个新的inode，类型为T_SYMLINK
+
+  if(ip == 0){ // 创建失败，可能是路径无效或文件已存在
+    end_op();
+    return -1;
+  }
+
+  if (writei(ip, 0, (uint64)target, 0, strlen(target)) < 0){ // 将目标路径写入符号链接的内容
+    end_op();
+    return -1;
+  }
+
+  iunlockput(ip); // 释放inode
+  end_op(); // 结束文件系统操作
+
+  return 0; // 成功返回0
 }

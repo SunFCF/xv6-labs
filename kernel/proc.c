@@ -134,6 +134,11 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // 清空mmap映射的虚拟地址数组
+  for(int i=0;i<MAX_VMA;i++) {
+    p->vmas[i].valid = 0;
+  }
+
   return p;
 }
 
@@ -146,8 +151,17 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+
+  // 调用vmaunmap，释放mmap映射的物理内存页
+  for(int i=0;i<MAX_VMA;i++) {
+    struct vma *v = &p->vmas[i];
+    if(v->valid) {
+      vmaunmap(p->pagetable, v->vastart, v->sz, v);
+    }
+  }
+
   if(p->pagetable)
-    proc_freepagetable(p->pagetable, p->sz);
+    proc_freepagetable(p->pagetable, p->sz);  // 释放页表和页表指向的物理内存
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -295,6 +309,15 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+  // 拷贝父进程的所有 vma，但是不拷贝物理页
+  for(i = 0; i < MAX_VMA; i++) {
+    struct vma *v = &p->vmas[i];
+    if(v->valid) {
+      np->vmas[i] = *v;
+      filedup(v->f);  // 增加文件引用计数，因为子进程也映射了这个文件
+    }
+  }
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 

@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -482,5 +483,152 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+// 实现 mmap 系统调用
+uint64
+sys_mmap(void)
+{
+  uint64 addr; // 用户传入的地址
+  uint64 sz;   // 映射的长度
+  uint64 offset; // 文件偏移
+  int prot;    // 保护标志
+  int flags;   // 映射标志
+  int fd;      // 文件描述符
+  struct file *f; // 文件指针
+
+  // 获取系统调用参数   
+  if(argaddr(0, &addr) < 0 || argaddr(1, &sz) < 0 || argint(2, &prot) < 0
+    || argint(3, &flags) < 0 || argfd(4, &fd, &f) < 0 || argaddr(5, &offset) < 0 || sz == 0)
+    return -1;
+  
+  // 参数合法性检查
+  if((!f->readable && (prot & (PROT_READ))) // 如果文件不可读但映射请求了读权限，返回错误
+     || (!f->writable && (prot & PROT_WRITE) && !(flags & MAP_PRIVATE)))// 如果文件不可写但映射请求了写权限且不是私有映射，返回错误
+    return -1;
+  
+  sz = PGROUNDUP(sz); // 将映射长度向上取整到页大小的整数倍
+
+  struct proc *p = myproc();
+  struct vma *v = 0;
+  uint64 vaend = MMAPEND; // MMAP 的结束地址
+
+  // 在进程的 VMA 数组中找到一个空闲的 VMA 来记录这个映射,并计算当前已使用的 VMA 的最低地址
+  // 在最低地址处分配新的映射
+  for(int i=0;i<MAX_VMA;i++) {
+    struct vma *vv = &p->vmas[i];
+    if(vv->valid == 0) {  // 如果找到一个空闲的 VMA，记录这个映射
+      if(v == 0) {
+        v = &p->vmas[i];
+        // found free vma;
+        v->valid = 1;
+      }
+    } else if(vv->vastart < vaend) {  // 计算当前已使用的 VMA 的最低地址
+      vaend = PGROUNDDOWN(vv->vastart);
+    }
+  }
+  
+  if(v == 0) { // 如果没有空闲的 VMA，返回错误
+    panic("mmap: no free vma");
+  }
+  // 初始化
+  v->vastart = vaend - sz;
+  v->sz = sz;
+  v->prot = prot;
+  v->flags = flags;
+  v->f = f; 
+  v->offset = offset;
+
+  filedup(v->f);
+
+  return v->vastart;
+}
+
+// 映射使用懒分配实现，在访问映射的虚拟地址时才分配物理页并建立映射关系
+
+// 在进程的 VMA 数组中查找包含指定虚拟地址的 VMA
+struct vma *findvma(struct proc *p, uint64 va) {
+  for(int i=0;i<MAX_VMA;i++) {
+    struct vma *vv = &p->vmas[i];
+    if(vv->valid == 1 && va >= vv->vastart && va < vv->vastart + vv->sz) {
+      return vv;
+    }
+  }
+  return 0;
+}
+// 在访问映射的虚拟地址时分配物理页并建立映射关系
+int vmatrylazytouch(uint64 va){
+  struct proc *p = myproc();
+  struct vma *v = findvma(p, va);
+  if(v == 0) {
+    return 0;
+  }
+
+  // 分配物理页
+  void *pa = kalloc();
+  if(pa == 0) {
+    panic("vmalazytouch: kalloc");
+  }
+  memset(pa, 0, PGSIZE);
+
+  // 读取文件
+  begin_op();
+  ilock(v->f->ip);
+  readi(v->f->ip, 0, (uint64)pa, v->offset + PGROUNDDOWN(va - v->vastart), PGSIZE);
+  iunlock(v->f->ip);
+  end_op();
+
+  // 建立映射关系
+  if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)pa, PTE_U | PTE_R | PTE_W) < 0) {
+    kfree(pa);
+    panic("vmalazytouch: mappages");
+  }
+
+  return 1;
+}
+
+// 实现 munmap 系统调用
+uint64
+sys_munmap(void) {
+  uint64 addr; // 用户传入的地址
+  uint64 sz;   // 解除映射的长度
+  
+  if(argaddr(0, &addr) < 0 || argaddr(1, &sz) < 0 || sz == 0) // 获取系统调用参数
+    return -1;
+  
+  struct proc *p = myproc();
+  struct vma *v = findvma(p, addr);   // 查找对应的 VMA
+  if(v == 0) {
+    return -1;
+  }
+  
+  if(addr > v->vastart && addr + sz < v->vastart + v->sz) {
+    // 如果要解除映射的区域在 VMA 内部，返回错误;解除映射不能挖洞
+    // 因为在访问映射的虚拟地址时分配物理页并建立映射关系时是根据 VMA 的起始地址和大小来判断的，如果挖洞了，后半段就无法访问了
+    return -1;
+  }
+  // 解除映射
+  uint64 addr_aligned = addr;
+  if(addr > v->vastart) {
+    addr_aligned = PGROUNDUP(addr); // 解除映射的起始地址向上对齐到页边界
+  } 
+
+  int nunmap = sz - (addr_aligned-addr);// 释放的字节数
+  if(nunmap < 0)
+    nunmap = 0;  
+
+  vmaunmap(p->pagetable, addr_aligned, nunmap, v); // 解除映射关系
+  // 如果解除映射的区域包含了 VMA 的起始地址，更新 VMA 的起始地址和大小
+  if(addr <= v->vastart && addr + sz > v->vastart) { 
+    v->offset += addr + sz - v->vastart;
+    v->vastart = addr + sz;
+  }
+  v->sz -= sz;
+
+  if(v->sz <= 0) {
+    fileclose(v->f);
+    v->valid = 0;
+  }  
   return 0;
 }

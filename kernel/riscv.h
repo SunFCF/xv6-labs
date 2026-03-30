@@ -331,6 +331,9 @@ sfence_vma()
 #define PTE_W (1L << 2)
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // 1 -> user can access
+#define PTE_G (1L << 5) // 全局页，表示该页在所有地址空间中都有效，通常用于内核代码和数据的映射
+#define PTE_A (1L << 6) // 已经访问过了，表示该页被访问过了，可以用于页面替换算法判断页面是否被访问过了
+#define PTE_D (1L << 7) // 脏页，表示该页被写过了
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)

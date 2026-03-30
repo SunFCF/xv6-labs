@@ -65,3 +65,7 @@
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+// MMAP 可以使用的所能使用的最后一个页+1（只可以使用这个之后的页）
+// 堆是从 TRAPFRAME 之后开始的，所以 MMAP 的起始地址就是 TRAPFRAME 的地址，进程的堆从低地址开始分配，直到 TRAPFRAME 的地址，
+// 所以将MMAP 从 TRAPFRAME 的之后开始分配向下分配不会和堆冲突。
+#define MMAPEND TRAPFRAME

@@ -108,6 +108,7 @@ filestat(struct file *f, uint64 addr)
 
 // Read from file f.
 // addr is a user virtual address.
+// 这个函数根据文件类型的不同，调用不同的读函数来完成读操作。
 int
 fileread(struct file *f, uint64 addr, int n)
 {
@@ -142,6 +143,7 @@ fileread(struct file *f, uint64 addr, int n)
 
 // Write to file f.
 // addr is a user virtual address.
+// 这个函数根据文件类型的不同，调用不同的写函数来完成写操作。
 int
 filewrite(struct file *f, uint64 addr, int n)
 {

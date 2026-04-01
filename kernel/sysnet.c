@@ -31,7 +31,8 @@ sockinit(void)
 {
   initlock(&lock, "socktbl");
 }
-
+// 创建一个socket，并将它添加到全局的socket列表中。每个socket都包含了远程IP地址、远程端口号和本地端口号等信息，
+// 以及一个接收队列rxq，用于存储等待被接收的网络数据包。
 int
 sockalloc(struct file **f, uint32 raddr, uint16 lport, uint16 rport)
 {

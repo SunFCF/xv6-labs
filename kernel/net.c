@@ -62,6 +62,7 @@ mbuftrim(struct mbuf *m, unsigned int len)
 }
 
 // Allocates a packet buffer.
+// 分配mbuf缓冲区
 struct mbuf *
 mbufalloc(unsigned int headroom)
 {
@@ -160,6 +161,9 @@ in_cksum(const unsigned char *addr, int len)
 }
 
 // sends an ethernet packet
+// 这个函数将一个mbuf中的数据封装成一个以太网帧，并通过e1000发送出去。
+// 它首先在mbuf前面预留出以太网头部的空间，然后填充以太网头部的信息，包括源MAC地址、目的MAC地址和以太网类型。
+// 最后调用e1000_transmit函数将这个帧发送出去。
 static void
 net_tx_eth(struct mbuf *m, uint16 ethtype)
 {
@@ -353,6 +357,8 @@ fail:
 
 // called by e1000 driver's interrupt handler to deliver a packet to the
 // networking stack
+// 这个函数首先从mbuf中提取以太网头部，然后根据以太网类型字段，判断这是一个IP包还是一个ARP包，
+// 最后调用相应的处理函数来处理这个包。
 void net_rx(struct mbuf *m)
 {
   struct eth *ethhdr;

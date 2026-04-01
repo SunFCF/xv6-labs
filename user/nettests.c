@@ -25,7 +25,7 @@ ping(uint16 sport, uint16 dport, int attempts)
     fprintf(2, "ping: connect() failed\n");
     exit(1);
   }
-
+  //  write() 时：sockwrite() 调用 net_tx_udp()，再走到 e1000_transmit()，最后通过 e1000 发送出去。
   for(int i = 0; i < attempts; i++) {
     if(write(fd, obuf, strlen(obuf)) < 0){
       fprintf(2, "ping: send() failed\n");

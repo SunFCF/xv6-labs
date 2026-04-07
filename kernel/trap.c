@@ -87,7 +87,7 @@ usertrap(void)
   {
     if(p->alarm_interval != 0) { // 如果设定了时钟事件
       if(--p->alarm_ticks <= 0) { // 时钟倒计时 -1 tick，如果已经到达或超过设定的 tick 数
-        if(!p->alarm_goingoff) { // 确保没有时钟正在运行
+        if(!p->alarm_goingoff) { // 确保没有其他中断处理函数正在运行
           p->alarm_ticks = p->alarm_interval;
           // 备份当前的 trapframe 到 alarm_trapframe 中，以便时钟处理函数执行完成后能够恢复到正确的状态继续执行原程序
           *p->alarm_trapframe = *p->trapframe; // 
@@ -117,10 +117,12 @@ usertrapret(void)
   intr_off();
 
   // send syscalls, interrupts, and exceptions to trampoline.S
+  // 保存下次 trap 入口
   w_stvec(TRAMPOLINE + (uservec - trampoline));
 
   // set up trapframe values that uservec will need when
   // the process next re-enters the kernel.
+  // 保存内核下次 trap 时恢复内核环境所需的信息到 trapframe 中，这些信息会被 uservec.S 的 usertrap() 使用
   p->trapframe->kernel_satp = r_satp();         // kernel page table
   p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
   p->trapframe->kernel_trap = (uint64)usertrap;
@@ -136,9 +138,11 @@ usertrapret(void)
   w_sstatus(x);
 
   // set S Exception Program Counter to the saved user pc.
+  // 设置 sepc 寄存器为用户程序的 pc，这样执行 sret 指令时就会跳转回用户程序继续执行
   w_sepc(p->trapframe->epc);
 
   // tell trampoline.S the user page table to switch to.
+  // 这里的 satp 是用户程序的页表地址，trampoline.S 的 usertrapret() 会切换到这个页表
   uint64 satp = MAKE_SATP(p->pagetable);
 
   // jump to trampoline.S at the top of memory, which 
